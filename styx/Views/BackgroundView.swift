@@ -33,7 +33,7 @@ struct BackgroundView: View {
 }
 
 struct WidgetLayerView: View {
-    @ObservedObject var delegate: AppDelegate
+    @StateObject var delegate: AppDelegate
 
     var body: some View {
         GeometryReader { geo in

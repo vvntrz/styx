@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct WidgetWrapperView_Refined: View {
-    @ObservedObject var widget: WidgetModel
-    @ObservedObject var delegate: AppDelegate
+    @StateObject var widget: WidgetModel
+    @StateObject var delegate: AppDelegate
     let isEditable: Bool
     let parentSize: CGSize
     let scale: CGFloat

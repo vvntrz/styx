@@ -13,7 +13,7 @@ import AVKit
 
 
 struct RootOverlay {
-    @ObservedObject var delegate: AppDelegate
+    @StateObject var delegate: AppDelegate
 
 
     // Helper for widget positioning

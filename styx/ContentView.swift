@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var delegate: AppDelegate
+    @StateObject var delegate: AppDelegate
     
     let desktopSize = CGSize(width: 1920, height: 1080)
     @State private var selectedWidgetURL: URL? = nil
@@ -110,6 +110,7 @@ struct ContentView: View {
                     }
                 }
                 .background(Color(nsColor: .windowBackgroundColor))
+                .cornerRadius(10)
                 
                 HStack {
                     Picker("Add Widget", selection: $selectedWidgetURL) {

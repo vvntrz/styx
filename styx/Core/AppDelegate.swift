@@ -252,8 +252,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "layers.fill", accessibilityDescription: nil)
+            if let logoImage = NSImage(named: "s") {
+                logoImage.size = NSSize(width: 18, height: 18)
+                logoImage.isTemplate = true
+                button.image = logoImage
+            } else {
+                button.image = NSImage(systemSymbolName: "layers.fill", accessibilityDescription: nil)
+            }
         }
+
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Editor", action: #selector(showEditor), keyEquivalent: "e")
         menu.addItem(NSMenuItem.separator())
@@ -261,7 +268,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         menu.addItem(withTitle: "Quit Styx", action: #selector(quitApp), keyEquivalent: "q")
         statusItem?.menu = menu
     }
-    
     @objc func showEditor() {
         if editorWindow == nil {
             let screen = NSScreen.main?.visibleFrame ?? .zero
