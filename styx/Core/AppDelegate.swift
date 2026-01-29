@@ -227,6 +227,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             }
         }
     
+    func copyFolder(from source: URL, to dest: URL) throws {
+        try FileManager.default.copyItem(at: source, to: dest)
+    }
+    
+    
     @objc func promptForWidgetFolder() {
         NSApp.activate(ignoringOtherApps: true)
         let p = NSOpenPanel()
@@ -234,7 +239,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         p.canChooseDirectories = true
         p.canChooseFiles = false
         p.begin { response in
-            if response == .OK, let url = p.url { self.loadWidget(from: url) }
+            if response == .OK, let url = p.url {
+                try? self.copyFolder(from: url, to: StyxConfigHandler().configDirectoryURL.appendingPathComponent("Widgets").appendingPathComponent(url.lastPathComponent))
+                self.loadWidget(from: url)
+                
+            }
         }
     }
     

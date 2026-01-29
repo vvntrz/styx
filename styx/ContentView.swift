@@ -1,19 +1,18 @@
-
 import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var delegate = AppDelegate()
     
     let desktopSize = CGSize(width: 1920, height: 1080)
+    @State private var selectedWidgetURL: URL? = nil
     
     var body: some View {
         VStack(spacing: 0) {
             GeometryReader { geo in
                 let scale = min(geo.size.width / desktopSize.width, geo.size.height / desktopSize.height)
-                let scaledSize = CGSize(width: desktopSize.width * scale, height: desktopSize.height * scale)
                 let offset = CGPoint(
-                    x: (geo.size.width - scaledSize.width) / 2,
-                    y: (geo.size.height - scaledSize.height) / 2
+                    x: (geo.size.width - (desktopSize.width * scale)) / 2,
+                    y: (geo.size.height - (desktopSize.height * scale)) / 2
                 )
                 
                 ZStack {
@@ -59,9 +58,9 @@ struct ContentView: View {
                 
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Desktop Manager")
+                        Text("Styx Editor")
                             .font(.system(size: 16, weight: .bold))
-                        Text("Configure your active widgets and wallpaper settings.")
+                        Text("Configure active wallpapers and widgets.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -69,27 +68,52 @@ struct ContentView: View {
                     Spacer()
                     
                     HStack(spacing: 12) {
-                        Button(action: {/* fix */ }) {
-                            Label("Add Widget", systemImage: "plus")
+                        Picker("Available Widgets", selection: $selectedWidgetURL) {
+                            Text("Select a widget").tag(URL?.none)
+                            ForEach(getAvailableWidgetURLs(), id: \.self) { url in
+                                Text(getWidgetName(from: url)).tag(URL?.some(url))
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        Button(action: {
-                            AppDelegate().promptForWidgetFolder()
-                        }) {
-                            Label("Import Widget", systemImage: "plus")
-                        }
+                        .frame(width: 200)
                         
-                        Button(action: { /* Refresh logic */ }) {
-                            Image(systemName: "arrow.clockwise")
+                        Button(action: {
+                            if let url = selectedWidgetURL {
+                                delegate.loadWidget(from: url)
+                            }
+                        }) {
+                            Label("Add", systemImage: "plus")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selectedWidgetURL == nil)
+
+                        Button(action: {
+                            delegate.promptForWidgetFolder()
+                        }) {
+                            Label("Import", systemImage: "square.and.arrow.down")
                         }
                         .buttonStyle(.bordered)
                     }
                 }
                 .padding(.horizontal, 25)
-                .frame(height: 150)
+                .frame(height: 100)
                 .background(.ultraThinMaterial)
             }
         }
         .ignoresSafeArea(.all, edges: .top)
+    }
+
+    private func getAvailableWidgetURLs() -> [URL] {
+        let widgetsFolder = StyxConfigHandler().configDirectoryURL.appendingPathComponent("Widgets")
+        let content = try? FileManager.default.contentsOfDirectory(at: widgetsFolder, includingPropertiesForKeys: [.isDirectoryKey])
+        return content?.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true } ?? []
+    }
+
+    private func getWidgetName(from folderURL: URL) -> String {
+        let configURL = folderURL.appendingPathComponent("styx.json")
+        guard let data = try? Data(contentsOf: configURL),
+              let config = try? JSONDecoder().decode(StyxConfig.self, from: data) else {
+            return folderURL.lastPathComponent
+        }
+        return config.name
     }
 }

@@ -30,6 +30,11 @@ class StyxConfigHandler {
                 withIntermediateDirectories: true,
                 attributes: nil
             )
+            try fm.createDirectory(
+                at: configDirectoryURL.appendingPathComponent("Widgets"),
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
             
             let fileURL = configDirectoryURL.appendingPathComponent("styx.json")
             
