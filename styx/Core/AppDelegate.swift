@@ -65,14 +65,42 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
     
     @objc func screenConfigurationChanged() {
-        setupWindows()
+        // Only rebuild windows when screen configuration actually changes
+        let currentScreens = Set(NSScreen.screens.map { $0.frame })
+        let existingScreens = Set(screenWindows.map { $0.screen.frame })
+        
+        if currentScreens != existingScreens {
+            teardownWindows()
+            for screen in NSScreen.screens {
+                buildStack(for: screen)
+            }
+        }
+    }
+
+    private func teardownWindows() {
+        for windowSet in screenWindows {
+            windowSet.background.orderOut(nil)
+            windowSet.widget.orderOut(nil)
+            windowSet.foreground.orderOut(nil)
+            
+            windowSet.background.contentView = nil
+            windowSet.widget.contentView = nil
+            windowSet.foreground.contentView = nil
+        }
+        screenWindows.removeAll()
     }
 
     @objc func setupWindows() {
-        screenWindows.forEach { $0.closeAll() }
-        screenWindows.removeAll()
-        for screen in NSScreen.screens {
-            buildStack(for: screen)
+        if screenWindows.isEmpty {
+            for screen in NSScreen.screens {
+                buildStack(for: screen)
+            }
+        } else {
+            for windowSet in screenWindows {
+                windowSet.background.contentView = NSHostingView(rootView: BackgroundView(player: videoPlayer, imageURL: backgroundURL))
+                windowSet.widget.contentView = NSHostingView(rootView: WidgetLayerView(delegate: self))
+                windowSet.foreground.contentView = NSHostingView(rootView: ForegroundView(image: foregroundImage))
+            }
         }
     }
     
