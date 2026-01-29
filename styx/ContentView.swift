@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject var delegate: AppDelegate
+    @ObservedObject var delegate: AppDelegate
     
     let desktopSize = CGSize(width: 1920, height: 1080)
     @State private var selectedWidgetURL: URL? = nil

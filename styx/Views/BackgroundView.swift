@@ -33,13 +33,13 @@ struct BackgroundView: View {
 }
 
 struct WidgetLayerView: View {
-    @StateObject var delegate: AppDelegate
+    @ObservedObject var delegate: AppDelegate
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 ForEach(delegate.activeWidgets) { widget in
-                    if (widget.config.doShow!) {
+                    if widget.config.doShow ?? true {
                         StyxWebView(widget: widget)
                             .frame(width: widget.config.width, height: widget.config.height)
                             .position(RootOverlay.calculatePoint(screen: geo.size, widget: widget))

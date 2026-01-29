@@ -192,16 +192,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             .store(in: &cancellables)
     }
 
-    func loadWidget(from folderURL: URL, overrideX: CGFloat? = nil, overrideY: CGFloat? = nil) {
+    func loadWidget(from folderURL: URL, overrideX: CGFloat? = nil, overrideY: CGFloat? = nil, overrideWidth: CGFloat? = nil, overrideHeight: CGFloat? = nil, overridePosition: StyxPosition? = nil) {
         let configURL = folderURL.appendingPathComponent("styx.json")
         do {
             let data = try Data(contentsOf: configURL)
             var config = try JSONDecoder().decode(StyxConfig.self, from: data)
-            if let x = overrideX, let y = overrideY {
+            if let pos = overridePosition {
+                config.position = pos
+                config.x = overrideX
+                config.y = overrideY
+            } else if let x = overrideX, let y = overrideY {
                 config.x = x
                 config.y = y
                 config.position = .custom
             }
+            if let w = overrideWidth { config.width = w }
+            if let h = overrideHeight { config.height = h }
             DispatchQueue.main.async {
                 self.objectWillChange.send()
                 self.activeWidgets.append(WidgetModel(folderURL: folderURL, config: config))
@@ -220,7 +226,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             if response == .OK, let url = p.url {
                 let dest = StyxConfigHandler().configDirectoryURL.appendingPathComponent("Widgets").appendingPathComponent(url.lastPathComponent)
                 try? FileManager.default.copyItem(at: url, to: dest)
-                self.loadWidget(from: url)
+                self.loadWidget(from: dest)
             }
         }
     }
@@ -232,6 +238,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let url: String
         let x: CGFloat
         let y: CGFloat
+        let width: CGFloat
+        let height: CGFloat
+        let position: StyxPosition
     }
     
     struct State: Codable {
@@ -240,24 +249,59 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let vid: String?
     }
     
+    private var configFileURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let styxDir = appSupport.appendingPathComponent("Styx")
+        try? FileManager.default.createDirectory(at: styxDir, withIntermediateDirectories: true)
+        return styxDir.appendingPathComponent("config.json")
+    }
+    
     @objc func saveConfiguration() {
-        let widgetDataList = activeWidgets.compactMap { widget -> SavedWidgetData? in
-            return SavedWidgetData(url: widget.folderURL.absoluteString, x: widget.config.x ?? 100, y: widget.config.y ?? 100)
+        activeWidgets.removeAll { $0.config.doShow == false }
+        
+        let widgetDataList = activeWidgets.map { widget -> SavedWidgetData in
+            print("Saving widget: x=\(widget.config.x ?? -1) y=\(widget.config.y ?? -1) pos=\(widget.config.position ?? .custom)")
+            return SavedWidgetData(
+                url: widget.folderURL.absoluteString,
+                x: widget.config.x ?? 0,
+                y: widget.config.y ?? 0,
+                width: widget.config.width,
+                height: widget.config.height,
+                position: widget.config.position ?? .custom
+            )
         }
         let state = State(widgets: widgetDataList, img: backgroundURL?.absoluteString, vid: vidUrl?.absoluteString)
         if let data = try? JSONEncoder().encode(state) {
-            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".styx.json")
-            try? data.write(to: url)
+            try? data.write(to: configFileURL)
+            print("Saved config to: \(configFileURL.path)")
+        }
+        
+        objectWillChange.send()
+        for windowSet in screenWindows {
+            windowSet.widget.contentView = NSHostingView(rootView: WidgetLayerView(delegate: self))
         }
     }
     
     @objc func loadConfiguration() {
-        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".styx.json")
-        guard let data = try? Data(contentsOf: url), let state = try? JSONDecoder().decode(State.self, from: data) else { return }
+        print("Loading config from: \(configFileURL.path)")
+        print("File exists: \(FileManager.default.fileExists(atPath: configFileURL.path))")
+        
+        guard let data = try? Data(contentsOf: configFileURL) else {
+            print("No config file found or couldn't read")
+            return
+        }
+        
+        guard let state = try? JSONDecoder().decode(State.self, from: data) else {
+            print("Failed to decode config")
+            return
+        }
+        
+        print("Loaded \(state.widgets.count) widgets from config")
         self.activeWidgets.removeAll()
         for widgetData in state.widgets {
+            print("  Widget: \(widgetData.url) at (\(widgetData.x), \(widgetData.y)) pos=\(widgetData.position)")
             if let url = URL(string: widgetData.url) {
-                loadWidget(from: url, overrideX: widgetData.x, overrideY: widgetData.y)
+                loadWidget(from: url, overrideX: widgetData.x, overrideY: widgetData.y, overrideWidth: widgetData.width, overrideHeight: widgetData.height, overridePosition: widgetData.position)
             }
         }
         if let imgString = state.img, let imgUrl = URL(string: imgString) {

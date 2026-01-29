@@ -1,8 +1,9 @@
 import SwiftUI
+import Combine
 
 struct WidgetWrapperView_Refined: View {
-    @StateObject var widget: WidgetModel
-    @StateObject var delegate: AppDelegate
+    @ObservedObject var widget: WidgetModel
+    @ObservedObject var delegate: AppDelegate
     let isEditable: Bool
     let parentSize: CGSize
     let scale: CGFloat
@@ -54,13 +55,15 @@ struct WidgetWrapperView_Refined: View {
                                 let newX = snap(finalCenterX - (width / 2))
                                 let newY = snap(finalCenterY - (height / 2))
                                 
+                                print("Drag ended: setting x=\(newX) y=\(newY)")
+                                widget.objectWillChange.send()
                                 widget.config.x = newX
                                 widget.config.y = newY
                                 widget.config.position = .custom
+                                print("After set: x=\(widget.config.x ?? -999) y=\(widget.config.y ?? -999)")
                             }
                     )
 
-                // Resize Handle
                 VStack {
                     Spacer()
                     HStack {
@@ -82,6 +85,7 @@ struct WidgetWrapperView_Refined: View {
                                         let newW = snap(max(50, start.width + value.translation.width / scale))
                                         let newH = snap(max(50, start.height + value.translation.height / scale))
 
+                                        widget.objectWillChange.send()
                                         widget.config.width = newW
                                         widget.config.height = newH
                                     }
@@ -94,6 +98,7 @@ struct WidgetWrapperView_Refined: View {
         .frame(width: width, height: height)
         .contextMenu {
             Button(role: .destructive) {
+                widget.objectWillChange.send()
                 widget.config.doShow = false
             } label: {
                 Label("Delete Widget", systemImage: "trash")
@@ -104,6 +109,7 @@ struct WidgetWrapperView_Refined: View {
             Menu("Snap to Alignment") {
                 ForEach(StyxPosition.allCases.filter { $0 != .custom }, id: \.self) { pos in
                     Button(pos.rawValue.capitalized) {
+                        widget.objectWillChange.send()
                         widget.config.x = 0
                         widget.config.y = 0
                         widget.config.position = pos

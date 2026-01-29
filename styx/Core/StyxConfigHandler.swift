@@ -10,10 +10,9 @@ class StyxConfigHandler {
     let fm = FileManager.default
     var cbool: ObjCBool = true
     let configDirectoryURL: URL = {
-            return FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".config")
-                .appendingPathComponent("styx")
-        }()
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("Styx")
+    }()
 
     func runChecks() {
         var isDir: ObjCBool = true

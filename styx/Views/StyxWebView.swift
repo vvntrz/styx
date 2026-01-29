@@ -12,7 +12,6 @@ import WebKit
 struct StyxWebView: NSViewRepresentable {
     let widget: WidgetModel
     
-    // The Core JS API
     private let polyfill = """
     window.styx = {
         config: {},
