@@ -2,34 +2,42 @@ import SwiftUI
 
 struct WidgetWrapperView_Refined: View {
     @ObservedObject var widget: WidgetModel
+    @ObservedObject var delegate: AppDelegate
     let isEditable: Bool
     let parentSize: CGSize
     let scale: CGFloat
 
     @State private var initialRect: CGRect? = nil
-
     @GestureState private var dragOffset: CGSize = .zero
     
-    @State private var sel: String = ""
+    private let gridSize: CGFloat = 200.0
+
+
+    private func snap(_ value: CGFloat) -> CGFloat {
+        guard delegate.isSnappingEnabled else { return value }
+        return round(value / gridSize) * gridSize
+    }
 
     var body: some View {
+        let width = widget.config.width
+        let height = widget.config.height
         let currentPos = RootOverlay.calculatePoint(screen: parentSize, widget: widget)
 
         ZStack {
-            if (widget.config.doShow!) {
+            if (widget.config.doShow ?? true) {
                 StyxWebView(widget: widget)
                     .allowsHitTesting(!isEditable)
             }
 
-            if isEditable && widget.config.doShow! {
-                // Border
-
+            if isEditable && (widget.config.doShow ?? true) {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(Color.blue, lineWidth: 2)
+                    .background(Color.blue.opacity(0.05))
+                
                 Color.white.opacity(0.001)
                     .gesture(
                         DragGesture(coordinateSpace: .global)
-                            .updating($dragOffset) { value, state, transaction in
+                            .updating($dragOffset) { value, state, _ in
                                 state = CGSize(
                                     width: value.translation.width / scale,
                                     height: value.translation.height / scale
@@ -42,9 +50,9 @@ struct WidgetWrapperView_Refined: View {
                                 let finalCenterX = currentPos.x + deltaX
                                 let finalCenterY = currentPos.y + deltaY
                                 
-                               
-                                let newX = finalCenterX - (widget.config.width / 2)
-                                let newY = finalCenterY - (widget.config.height / 2)
+                                // Snap top-left corner
+                                let newX = snap(finalCenterX - (width / 2))
+                                let newY = snap(finalCenterY - (height / 2))
                                 
                                 widget.config.x = newX
                                 widget.config.y = newY
@@ -52,26 +60,27 @@ struct WidgetWrapperView_Refined: View {
                             }
                     )
 
+                // Resize Handle
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
                         Circle()
                             .fill(Color.blue)
-                            .frame(width: 15, height: 15)
-                            .padding(2)
-                            .background(Circle().fill(Color.white))
-                            .offset(x: 5, y: 5)
+                            .frame(width: 12, height: 12)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                            .padding(4)
+                            .contentShape(Rectangle())
                             .gesture(
                                 DragGesture()
                                     .onChanged { value in
                                         if initialRect == nil {
-                                            initialRect = CGRect(x: 0, y: 0, width: widget.config.width, height: widget.config.height)
+                                            initialRect = CGRect(x: 0, y: 0, width: width, height: height)
                                         }
                                         guard let start = initialRect else { return }
 
-                                        let newW = max(50, start.width + value.translation.width)
-                                        let newH = max(50, start.height + value.translation.height)
+                                        let newW = snap(max(50, start.width + value.translation.width / scale))
+                                        let newH = snap(max(50, start.height + value.translation.height / scale))
 
                                         widget.config.width = newW
                                         widget.config.height = newH
@@ -82,21 +91,22 @@ struct WidgetWrapperView_Refined: View {
                 }
             }
         }
-        .frame(width: widget.config.width, height: widget.config.height)
+        .frame(width: width, height: height)
         .contextMenu {
-            let opts = ["topLeft", "topCenter", "topRight", "centerLeft", "center", "centerRight", "bottomLeft", "bottomCenter", "bottomRight"]
-            VStack {
-                Button("Delete Widget") {
-                    widget.config.doShow = false
-                }
-                Picker("Align", selection: $sel) {
-                    ForEach(opts, id: \.self) { opt in
-                        Button(opt, action: {
-                            widget.config.x = 0
-                            widget.config.y = 0
-                            widget.config.position = .center
-                            print("moving center")
-                        })
+            Button(role: .destructive) {
+                widget.config.doShow = false
+            } label: {
+                Label("Delete Widget", systemImage: "trash")
+            }
+            
+            Divider()
+            
+            Menu("Snap to Alignment") {
+                ForEach(StyxPosition.allCases.filter { $0 != .custom }, id: \.self) { pos in
+                    Button(pos.rawValue.capitalized) {
+                        widget.config.x = 0
+                        widget.config.y = 0
+                        widget.config.position = pos
                     }
                 }
             }

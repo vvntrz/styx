@@ -30,17 +30,8 @@ struct AnyCodable: Codable {
     }
 }
 
-enum WidgetPosition: String, Codable {
-    case topLeft = "topLeft"
-    case topCenter = "topCenter"
-    case topRight = "topRight"
-    case centerLeft = "centerLeft"
-    case center = "center"
-    case centerRight = "centerRight"
-    case bottomLeft = "bottomLeft"
-    case bottomCenter = "bottomCenter"
-    case bottomRight = "bottomRight"
-    case custom // Uses exact X/Y coordinates
+enum StyxPosition: String, Codable, CaseIterable {
+    case topLeft, topCenter, topRight, centerLeft, center, centerRight, bottomLeft, bottomCenter, bottomRight, custom
 }
 
 struct StyxProperty: Codable {
@@ -56,7 +47,7 @@ struct StyxConfig: Codable {
     var height: CGFloat
     var doShow: Bool?
     
-    var position: WidgetPosition?
+    var position: StyxPosition?
     var x: CGFloat?
     var y: CGFloat?
     // using these as css vars

@@ -4,14 +4,13 @@ import Combine
 import ScreenCaptureKit
 
 class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
-    
     @Published var activeWidgets: [WidgetModel] = []
     @Published var backgroundURL: URL?
+    @Published var isSnappingEnabled: Bool = false
     @Published var foregroundImage: NSImage?
     var vidUrl: URL?
     var fullScreenFlag = false
     var checker: Timer?
-    
     
     struct ScreenWindowSet {
         let screen: NSScreen
@@ -34,19 +33,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let videoPlayer: AVPlayer = {
         let p = AVPlayer(); p.actionAtItemEnd = .none; p.isMuted = true; return p
     }()
+
     @objc func updateFullscreenFlag() {
-       
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let isFS = NSWorkspace.shared.isAnySpaceFullScreen()
-            print("DEBUG: Fullscreen Check -> \(isFS)")
-            
             if isFS != self.fullScreenFlag {
                 self.fullScreenFlag = isFS
                 if isFS {
-                    print("ACTION: Pausing Video")
                     self.videoPlayer.pause()
                 } else {
-                    print("ACTION: Playing Video")
                     self.videoPlayer.play()
                 }
             }
@@ -59,45 +54,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         setupLooping()
         StyxConfigHandler().runChecks()
         
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(screenConfigurationChanged),
-            name: NSApplication.didChangeScreenParametersNotification,
-            object: nil
-        )
+        NotificationCenter.default.addObserver(self, selector: #selector(screenConfigurationChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        
         let wsCenter = NSWorkspace.shared.notificationCenter
-            
-            wsCenter.addObserver(
-                self,
-                selector: #selector(updateFullscreenFlag),
-                name: NSWorkspace.activeSpaceDidChangeNotification,
-                object: nil
-            )
-            
-            wsCenter.addObserver(
-                self,
-                selector: #selector(updateFullscreenFlag),
-                name: NSWorkspace.didActivateApplicationNotification,
-                object: nil
-            )
+        wsCenter.addObserver(self, selector: #selector(updateFullscreenFlag), name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        wsCenter.addObserver(self, selector: #selector(updateFullscreenFlag), name: NSWorkspace.didActivateApplicationNotification, object: nil)
+        
         loadConfiguration()
         updateFullscreenFlag()
-
     }
     
-
-    
-
-    
     @objc func screenConfigurationChanged() {
-        print("Displays changed. Rebuilding windows...")
         setupWindows()
     }
 
-    func setupWindows() {
+    @objc func setupWindows() {
         screenWindows.forEach { $0.closeAll() }
         screenWindows.removeAll()
-        
         for screen in NSScreen.screens {
             buildStack(for: screen)
         }
@@ -106,16 +79,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func buildStack(for screen: NSScreen) {
         let level = Int(CGWindowLevelForKey(.desktopWindow))
         
-        // Layer 1: Background
         let bg = createBorderlessWindow(level: level, rect: screen.frame)
         bg.contentView = NSHostingView(rootView: BackgroundView(player: videoPlayer, imageURL: backgroundURL))
         
-        // Layer 2: Widgets
         let wdg = createBorderlessWindow(level: level + 1, rect: screen.frame)
         wdg.contentView = NSHostingView(rootView: WidgetLayerView(delegate: self))
         wdg.ignoresMouseEvents = false
         
-        // Layer 3: Foreground (Depth)
         let fg = createBorderlessWindow(level: level + 2, rect: screen.frame)
         fg.contentView = NSHostingView(rootView: ForegroundView(image: foregroundImage))
         fg.ignoresMouseEvents = true
@@ -138,7 +108,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         return w
     }
 
-    
     @objc func promptForPhoto() {
         let p = NSOpenPanel(); p.allowedContentTypes = [.image]; p.canChooseDirectories = false
         p.begin { response in
@@ -151,7 +120,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             self.videoPlayer.pause()
             self.vidUrl = nil
             self.backgroundURL = url
-            
             for set in self.screenWindows {
                 set.background.contentView = NSHostingView(rootView: BackgroundView(player: self.videoPlayer, imageURL: url))
                 set.foreground.contentView = NSHostingView(rootView: ForegroundView(image: nil))
@@ -178,11 +146,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 DispatchQueue.main.async {
                     self.backgroundURL = nil
                     self.foregroundImage = nil
-                    
                     self.videoPlayer.replaceCurrentItem(with: AVPlayerItem(url: url))
                     self.vidUrl = url
                     self.videoPlayer.play()
-                    
                     for set in self.screenWindows {
                         set.background.contentView = NSHostingView(rootView: BackgroundView(player: self.videoPlayer, imageURL: nil))
                         set.foreground.contentView = NSHostingView(rootView: ForegroundView(image: nil))
@@ -197,59 +163,42 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             .sink { [weak self] _ in self?.videoPlayer.seek(to: .zero); self?.videoPlayer.play() }
             .store(in: &cancellables)
     }
-    
 
-    // Modified to allow passing explicit X/Y coordinates when loading
     func loadWidget(from folderURL: URL, overrideX: CGFloat? = nil, overrideY: CGFloat? = nil) {
-            let configURL = folderURL.appendingPathComponent("styx.json")
-            do {
-                let data = try Data(contentsOf: configURL)
-                var config = try JSONDecoder().decode(StyxConfig.self, from: data)
-                
-                // Apply saved overrides
-                if let x = overrideX, let y = overrideY {
-                                config.x = x
-                                config.y = y
-                                config.position = .custom // <--- Crucial!
-                            }
-                
-                DispatchQueue.main.async {
-                    print("Loaded Widget: \(config.name) at (\(config.x ?? 0), \(config.y ?? 0))")
-                    
-                    self.objectWillChange.send()
-                    
-                    self.activeWidgets.append(WidgetModel(folderURL: folderURL, config: config))
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    print("Widget load error: \(error)")
-                }
+        let configURL = folderURL.appendingPathComponent("styx.json")
+        do {
+            let data = try Data(contentsOf: configURL)
+            var config = try JSONDecoder().decode(StyxConfig.self, from: data)
+            if let x = overrideX, let y = overrideY {
+                config.x = x
+                config.y = y
+                config.position = .custom
             }
+            DispatchQueue.main.async {
+                self.objectWillChange.send()
+                self.activeWidgets.append(WidgetModel(folderURL: folderURL, config: config))
+            }
+        } catch {
+            print("Widget load error: \(error)")
         }
-    
-    func copyFolder(from source: URL, to dest: URL) throws {
-        try FileManager.default.copyItem(at: source, to: dest)
     }
-    
     
     @objc func promptForWidgetFolder() {
         NSApp.activate(ignoringOtherApps: true)
         let p = NSOpenPanel()
-        p.title = "Select Widget Folder"
         p.canChooseDirectories = true
         p.canChooseFiles = false
         p.begin { response in
             if response == .OK, let url = p.url {
-                try? self.copyFolder(from: url, to: StyxConfigHandler().configDirectoryURL.appendingPathComponent("Widgets").appendingPathComponent(url.lastPathComponent))
+                let dest = StyxConfigHandler().configDirectoryURL.appendingPathComponent("Widgets").appendingPathComponent(url.lastPathComponent)
+                try? FileManager.default.copyItem(at: url, to: dest)
                 self.loadWidget(from: url)
-                
             }
         }
     }
     
     @objc func clearWidgets() { activeWidgets.removeAll() }
     @objc func quitApp() { NSApplication.shared.terminate(nil) }
-    
 
     struct SavedWidgetData: Codable {
         let url: String
@@ -265,37 +214,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     
     @objc func saveConfiguration() {
         let widgetDataList = activeWidgets.compactMap { widget -> SavedWidgetData? in
-            return SavedWidgetData(
-                url: widget.folderURL.absoluteString,
-                x: widget.config.x ?? 100,
-                y: widget.config.y ?? 100
-            )
+            return SavedWidgetData(url: widget.folderURL.absoluteString, x: widget.config.x ?? 100, y: widget.config.y ?? 100)
         }
-        
         let state = State(widgets: widgetDataList, img: backgroundURL?.absoluteString, vid: vidUrl?.absoluteString)
-        
         if let data = try? JSONEncoder().encode(state) {
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            let url = home.appendingPathComponent(".styx.json")
+            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".styx.json")
             try? data.write(to: url)
-            print("Saved state with positions to \(url.path)")
         }
     }
     
     @objc func loadConfiguration() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let url = home.appendingPathComponent(".styx.json")
-        guard let data = try? Data(contentsOf: url),
-              let state = try? JSONDecoder().decode(State.self, from: data) else { return }
-        
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".styx.json")
+        guard let data = try? Data(contentsOf: url), let state = try? JSONDecoder().decode(State.self, from: data) else { return }
         self.activeWidgets.removeAll()
-        
         for widgetData in state.widgets {
             if let url = URL(string: widgetData.url) {
                 loadWidget(from: url, overrideX: widgetData.x, overrideY: widgetData.y)
             }
         }
-        
         if let imgString = state.img, let imgUrl = URL(string: imgString) {
             processImage(imgUrl)
         } else if let vidString = state.vid, let vidUrl = URL(string: vidString) {
@@ -305,7 +241,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 self.videoPlayer.replaceCurrentItem(with: AVPlayerItem(url: vidUrl))
                 self.vidUrl = vidUrl
                 self.videoPlayer.play()
-                
                 for set in self.screenWindows {
                     set.background.contentView = NSHostingView(rootView: BackgroundView(player: self.videoPlayer, imageURL: nil))
                     set.foreground.contentView = NSHostingView(rootView: ForegroundView(image: nil))
@@ -314,30 +249,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
-
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil)
+            button.image = NSImage(systemSymbolName: "layers.fill", accessibilityDescription: nil)
         }
         let menu = NSMenu()
-        menu.addItem(withTitle: "Select Video...", action: #selector(promptForVideo), keyEquivalent: "o")
-        menu.addItem(withTitle: "Select Image (Depth)...", action: #selector(promptForPhoto), keyEquivalent: "i")
-        menu.addItem(withTitle: "Add Widget...", action: #selector(promptForWidgetFolder), keyEquivalent: "w")
-        menu.addItem(withTitle: "Clear Widgets", action: #selector(clearWidgets), keyEquivalent: "k")
-        menu.addItem(withTitle: "Save Config", action: #selector(saveConfiguration), keyEquivalent: "s")
-        menu.addItem(withTitle: "Load Config", action: #selector(loadConfiguration), keyEquivalent: "l")
         menu.addItem(withTitle: "Open Editor", action: #selector(showEditor), keyEquivalent: "e")
-        menu.addItem(withTitle: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "Force Reload Windows", action: #selector(setupWindows), keyEquivalent: "r")
+        menu.addItem(withTitle: "Quit Styx", action: #selector(quitApp), keyEquivalent: "q")
         statusItem?.menu = menu
     }
     
     @objc func showEditor() {
         if editorWindow == nil {
             let screen = NSScreen.main?.visibleFrame ?? .zero
-            let rect = NSRect(x: screen.midX - 350, y: screen.midY - 200, width: 700, height: 400)
-            let w = NSWindow(contentRect: rect, styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            w.title = "Styx Editor"
+            let rect = NSRect(x: screen.midX - 450, y: screen.midY - 300, width: 900, height: 600)
+            let w = NSWindow(contentRect: rect, styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            w.titlebarAppearsTransparent = true
+            w.title = ""
             w.contentView = NSHostingView(rootView: ContentView(delegate: self))
             w.isReleasedWhenClosed = false
             editorWindow = w
